@@ -52,6 +52,19 @@ bala_powerup_visible = False
 bala_powerup_timer = 0
 bala_powerup_intervalo = 1200  # Igual que vida
 
+# Power-up de metralleta
+metralleta_powerup_color = (255, 255, 0)
+metralleta_powerup_ancho = 30
+metralleta_powerup_alto = 30
+metralleta_powerup_x = random.randint(0, ancho_pantalla - metralleta_powerup_ancho)
+metralleta_powerup_y = random.randint(0, alto_pantalla - metralleta_powerup_alto)
+metralleta_powerup_visible = False
+metralleta_powerup_timer = 0
+metralleta_powerup_intervalo = 1500  # frames
+metralleta_activa = False
+metralleta_duracion = 360  # frames (~6 segundos)
+metralleta_timer = 0
+
 # Crear lista de enemigos (vacía al inicio)
 enemigos = []
 
@@ -134,6 +147,10 @@ except:
 eliminados_para_especial = 0
 especial_disponible = False
 
+# Sistema de rondas
+ronda = 1
+enemigos_por_ronda = 6  # Puedes ajustar la dificultad
+
 # Bucle principal del juego
 ejecutando = True
 while ejecutando:
@@ -172,6 +189,28 @@ while ejecutando:
                     balas_disponibles -= 8
                     especial_disponible = False
                     eliminados_para_especial = 0
+            # Disparo con metralleta (SHIFT) si está activa
+            if evento.key == pygame.K_LSHIFT and metralleta_activa:
+                if balas_disponibles > 0:
+                    # Dispara 3 balas en ráfaga
+                    for i in range(3):
+                        balas.append([jugador_pos_x + jugador_ancho // 2 - bala_ancho // 2, jugador_pos_y, 0, -bala_velocidad])
+                        if sonido_disparo: sonido_disparo.play()
+                    balas_disponibles -= 3
+            # Ataque cuerpo a cuerpo (barra espaciadora) si no hay munición
+            if evento.key == pygame.K_SPACE and balas_disponibles == 0:
+                # Ataque corto alcance
+                cuchillo_rect = pygame.Rect(jugador_pos_x-10, jugador_pos_y-10, jugador_ancho+20, jugador_alto+20)
+                for enemigo in enemigos:
+                    if cuchillo_rect.colliderect(enemigo.rect()):
+                        enemigo.vida -= 2  # Mata de un golpe
+                        if enemigo.vida <= 0:
+                            puntaje += 1
+                            enemigos.remove(enemigo)
+                            eliminados_para_especial += 1
+                            if eliminados_para_especial >= 10:
+                                especial_disponible = True
+                        break
 
     # Espera antes de que aparezcan los enemigos
     if contador_espera < ticks_espera_enemigos:
@@ -188,7 +227,7 @@ while ejecutando:
         continue
     # Cuando termina la espera, crear los enemigos si aún no existen
     if not enemigos:
-        enemigos.extend([Enemigo() for _ in range(6)])  # Más enemigos
+        enemigos.extend([Enemigo() for _ in range(enemigos_por_ronda)])
 
     # Captura de teclas presionadas
     teclas = pygame.key.get_pressed()
@@ -233,12 +272,19 @@ while ejecutando:
                 enemigo.vida -= 1
                 if enemigo.vida <= 0:
                     puntaje += 1
-                    enemigo.reset()
+                    enemigos.remove(enemigo)
                     eliminados_para_especial += 1
                     if eliminados_para_especial >= 10:
                         especial_disponible = True
                 balas.remove(bala)
                 break
+
+    # Si todos los enemigos han sido eliminados, pasa a la siguiente ronda
+    if not enemigos and contador_espera >= ticks_espera_enemigos:
+        ronda += 1
+        enemigos_por_ronda += 2  # Aumenta la dificultad
+        enemigos.extend([Enemigo() for _ in range(enemigos_por_ronda)])
+        # Opcional: puedes aumentar la vida o velocidad de los enemigos aquí
 
     # Power-up de velocidad: si está visible y el jugador lo toma
     if powerup_visible:
@@ -290,6 +336,27 @@ while ejecutando:
             balas_disponibles += 10
             bala_powerup_visible = False
 
+    # Power-up de metralleta: aparece cada cierto tiempo
+    if not metralleta_powerup_visible and not metralleta_activa:
+        metralleta_powerup_timer += 1
+        if metralleta_powerup_timer >= metralleta_powerup_intervalo:
+            metralleta_powerup_x = random.randint(0, ancho_pantalla - metralleta_powerup_ancho)
+            metralleta_powerup_y = random.randint(0, alto_pantalla - metralleta_powerup_alto)
+            metralleta_powerup_visible = True
+            metralleta_powerup_timer = 0
+    if metralleta_powerup_visible:
+        powerup_rect = pygame.Rect(metralleta_powerup_x, metralleta_powerup_y, metralleta_powerup_ancho, metralleta_powerup_alto)
+        jugador_rect = pygame.Rect(jugador_pos_x, jugador_pos_y, jugador_ancho, jugador_alto)
+        if jugador_rect.colliderect(powerup_rect):
+            metralleta_activa = True
+            metralleta_timer = metralleta_duracion
+            metralleta_powerup_visible = False
+    if metralleta_activa:
+        metralleta_timer -= 1
+        if metralleta_timer <= 0:
+            metralleta_activa = False
+            metralleta_powerup_timer = 0  # Reinicia el timer para que vuelva a aparecer
+
     # Dibujar en la pantalla
     pantalla.fill(NEGRO)  # Fondo negro
     pygame.draw.rect(pantalla, AZUL, (jugador_pos_x, jugador_pos_y, jugador_ancho, jugador_alto))
@@ -310,11 +377,17 @@ while ejecutando:
     # Dibujar power-up de balas si está visible
     if bala_powerup_visible:
         pygame.draw.rect(pantalla, bala_powerup_color, (bala_powerup_x, bala_powerup_y, bala_powerup_ancho, bala_powerup_alto))
+    # Dibujar power-up de metralleta si está visible
+    if metralleta_powerup_visible:
+        pygame.draw.rect(pantalla, metralleta_powerup_color, (metralleta_powerup_x, metralleta_powerup_y, metralleta_powerup_ancho, metralleta_powerup_alto))
     # Mostrar puntaje y vidas
     texto_puntaje = fuente.render(f"Puntaje: {puntaje}", True, BLANCO)
     pantalla.blit(texto_puntaje, (10, 10))
     texto_vidas = fuente.render(f"Vidas: {vidas}", True, BLANCO)
     pantalla.blit(texto_vidas, (10, 50))
+    # Mostrar ronda
+    texto_ronda = fuente.render(f"Ronda: {ronda}", True, (255, 215, 0))
+    pantalla.blit(texto_ronda, (ancho_pantalla//2 - 60, 10))
     # Mostrar si el especial está disponible
     if especial_disponible:
         texto_especial = fuente.render("Especial listo: E", True, (0,255,255))
@@ -322,6 +395,14 @@ while ejecutando:
     # Mostrar munición
     texto_municion = fuente.render(f"Balas: {balas_disponibles}", True, (200,200,200))
     pantalla.blit(texto_municion, (10, 90))
+    # Si no tienes munición, muestra mensaje de cuchillo
+    if balas_disponibles == 0:
+        texto_cuchillo = fuente.render("Sin balas: usa ESPACIO para cuchillo", True, (255,100,100))
+        pantalla.blit(texto_cuchillo, (ancho_pantalla//2 - 180, alto_pantalla-60))
+    # Mostrar estado de metralleta
+    if metralleta_activa:
+        texto_metralleta = fuente.render("Metralleta activa! SHIFT", True, (255,255,0))
+        pantalla.blit(texto_metralleta, (ancho_pantalla//2 - 120, 50))
 
     # Actualizar la pantalla
     pygame.display.update()
