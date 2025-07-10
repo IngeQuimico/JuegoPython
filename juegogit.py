@@ -62,8 +62,13 @@ metralleta_powerup_visible = False
 metralleta_powerup_timer = 0
 metralleta_powerup_intervalo = 1500  # frames
 metralleta_activa = False
-metralleta_duracion = 360  # frames (~6 segundos)
+metralleta_duracion = 3600  # frames (~6 segundos)
 metralleta_timer = 0
+
+# Para guardar la munición antes de la metralleta
+municion_guardada = 0
+metralleta_disparo_cooldown = 5  # frames entre ráfagas
+metralleta_disparo_timer = 0
 
 # Crear lista de enemigos (vacía al inicio)
 enemigos = []
@@ -231,6 +236,7 @@ while ejecutando:
 
     # Captura de teclas presionadas
     teclas = pygame.key.get_pressed()
+    # Movimiento
     if teclas[pygame.K_LEFT] and jugador_pos_x > 0:
         jugador_pos_x -= jugador_velocidad
     if teclas[pygame.K_RIGHT] and jugador_pos_x < ancho_pantalla - jugador_ancho:
@@ -239,6 +245,34 @@ while ejecutando:
         jugador_pos_y -= jugador_velocidad
     if teclas[pygame.K_DOWN] and jugador_pos_y < alto_pantalla - jugador_alto:
         jugador_pos_y += jugador_velocidad
+
+    # Disparo automático con metralleta mientras se mantiene SHIFT y dirección
+    if metralleta_activa and teclas[pygame.K_LSHIFT]:
+        dx, dy = 0, 0
+        if teclas[pygame.K_w]:
+            dy = -bala_velocidad
+        if teclas[pygame.K_s]:
+            dy = bala_velocidad
+        if teclas[pygame.K_a]:
+            dx = -bala_velocidad
+        if teclas[pygame.K_d]:
+            dx = bala_velocidad
+        if dx != 0 or dy != 0:
+            if metralleta_disparo_timer == 0:
+                for i in range(3):
+                    balas.append([
+                        jugador_pos_x + jugador_ancho // 2 - bala_ancho // 2,
+                        jugador_pos_y + jugador_alto // 2 - bala_alto // 2,
+                        dx, dy
+                    ])
+                    if sonido_disparo: sonido_disparo.play()
+                metralleta_disparo_timer = metralleta_disparo_cooldown
+            else:
+                metralleta_disparo_timer -= 1
+        else:
+            metralleta_disparo_timer = 0
+    else:
+        metralleta_disparo_timer = 0
 
     # Lógica del juego
     # Mover enemigos hacia el jugador
@@ -351,11 +385,14 @@ while ejecutando:
             metralleta_activa = True
             metralleta_timer = metralleta_duracion
             metralleta_powerup_visible = False
+            municion_guardada = balas_disponibles
+            balas_disponibles = 1000  # Munición "infinita"
     if metralleta_activa:
         metralleta_timer -= 1
         if metralleta_timer <= 0:
             metralleta_activa = False
             metralleta_powerup_timer = 0  # Reinicia el timer para que vuelva a aparecer
+            balas_disponibles = municion_guardada  # Recupera la munición anterior
 
     # Dibujar en la pantalla
     pantalla.fill(NEGRO)  # Fondo negro
