@@ -111,6 +111,54 @@ class Enemigo:
     def rect(self):
         return pygame.Rect(self.x, self.y, self.ancho, self.alto)
 
+# Enemigos especiales
+class EnemigoEspecial(Enemigo):
+    def __init__(self):
+        super().__init__()
+        self.vida = 5
+        self.velocidad = 4
+        self.color = (0, 255, 255)  # Cian
+
+# Clase para jefe de ronda
+class Jefe:
+    def __init__(self):
+        self.ancho = 100
+        self.alto = 100
+        self.x = random.randint(0, ancho_pantalla - self.ancho)
+        self.y = -self.alto
+        self.vida = 30
+        self.velocidad = 4
+        self.color = (128, 0, 128)  # Morado
+        self.balas = []
+        self.cooldown = 60  # frames entre disparos
+        self.timer = 0
+    def mover_hacia_jugador(self, jugador_x, jugador_y):
+        dx = jugador_x - self.x
+        dy = jugador_y - self.y
+        distancia = max(1, (dx**2 + dy**2) ** 0.5)
+        self.x += self.velocidad * dx / distancia
+        self.y += self.velocidad * dy / distancia
+    def rect(self):
+        return pygame.Rect(self.x, self.y, self.ancho, self.alto)
+    def atacar(self, jugador_x, jugador_y):
+        if self.timer == 0:
+            dx = jugador_x - (self.x + self.ancho // 2)
+            dy = jugador_y - (self.y + self.alto // 2)
+            distancia = max(1, (dx**2 + dy**2) ** 0.5)
+            vel = 8
+            self.balas.append([
+                self.x + self.ancho // 2, self.y + self.alto // 2,
+                vel * dx / distancia, vel * dy / distancia
+            ])
+            self.timer = self.cooldown
+        else:
+            self.timer -= 1
+    def mover_balas(self):
+        for bala in self.balas:
+            bala[0] += bala[2]
+            bala[1] += bala[3]
+        self.balas = [b for b in self.balas if 0 <= b[0] <= ancho_pantalla and 0 <= b[1] <= alto_pantalla]
+
 # Vidas del jugador
 vidas = 3
 
@@ -155,6 +203,10 @@ especial_disponible = False
 # Sistema de rondas
 ronda = 1
 enemigos_por_ronda = 6  # Puedes ajustar la dificultad
+
+# Variables para jefe
+jefe = None
+jefe_activo = False
 
 # Bucle principal del juego
 ejecutando = True
@@ -230,9 +282,19 @@ while ejecutando:
         pygame.display.update()
         reloj.tick(60)
         continue
-    # Cuando termina la espera, crear los enemigos si aún no existen
-    if not enemigos:
+    # Cuando termina la espera, crear los enemigos y jefe si aún no existen
+    if not enemigos and not jefe_activo and contador_espera >= ticks_espera_enemigos:
+        # Solo crear enemigos, EnemigoEspecial y jefe según la ronda
         enemigos.extend([Enemigo() for _ in range(enemigos_por_ronda)])
+        # EnemigoEspecial solo en rondas pares
+        if ronda % 2 == 0:
+            enemigos.append(EnemigoEspecial())
+        # Jefe solo en rondas múltiplos de 5
+        if ronda % 5 == 0:
+            jefe = Jefe()
+            jefe_activo = True
+
+    # La ronda solo avanza cuando no hay enemigos y el jefe ha sido derrotado
 
     # Captura de teclas presionadas
     teclas = pygame.key.get_pressed()
@@ -278,6 +340,11 @@ while ejecutando:
     # Mover enemigos hacia el jugador
     for enemigo in enemigos:
         enemigo.mover_hacia_jugador(jugador_pos_x, jugador_pos_y)
+    # Mover jefe si está activo
+    if jefe_activo and jefe:
+        jefe.mover_hacia_jugador(jugador_pos_x, jugador_pos_y)
+        jefe.atacar(jugador_pos_x, jugador_pos_y)
+        jefe.mover_balas()
 
     # Mover balas
     for bala in balas:
@@ -312,13 +379,41 @@ while ejecutando:
                         especial_disponible = True
                 balas.remove(bala)
                 break
+    # Colisión bala-jefe
+    if jefe_activo and jefe:
+        for bala in balas[:]:
+            rect_bala = pygame.Rect(bala[0], bala[1], bala_ancho, bala_alto)
+            if rect_bala.colliderect(jefe.rect()):
+                jefe.vida -= 1
+                balas.remove(bala)
+                if jefe.vida <= 0:
+                    puntaje += 10
+                    jefe = None
+                    jefe_activo = False
 
-    # Si todos los enemigos han sido eliminados, pasa a la siguiente ronda
-    if not enemigos and contador_espera >= ticks_espera_enemigos:
+    # Colisión jefe-balas del jefe con jugador
+    if jefe_activo and jefe:
+        jugador_rect = pygame.Rect(jugador_pos_x, jugador_pos_y, jugador_ancho, jugador_alto)
+        for bala in jefe.balas[:]:
+            rect_bala = pygame.Rect(bala[0], bala[1], 12, 12)
+            if jugador_rect.colliderect(rect_bala):
+                vidas -= 1
+                jefe.balas.remove(bala)
+                if vidas <= 0:
+                    ejecutando = False
+
+    # Si todos los enemigos y el jefe han sido eliminados, pasa a la siguiente ronda
+    if not enemigos and not jefe_activo and contador_espera >= ticks_espera_enemigos:
         ronda += 1
         enemigos_por_ronda += 2  # Aumenta la dificultad
         enemigos.extend([Enemigo() for _ in range(enemigos_por_ronda)])
-        # Opcional: puedes aumentar la vida o velocidad de los enemigos aquí
+        # EnemigoEspecial solo en rondas pares
+        if ronda % 2 == 0:
+            enemigos.append(EnemigoEspecial())
+        # Jefe solo en rondas múltiplos de 5
+        if ronda % 5 == 0:
+            jefe = Jefe()
+            jefe_activo = True
 
     # Power-up de velocidad: si está visible y el jugador lo toma
     if powerup_visible:
@@ -397,8 +492,19 @@ while ejecutando:
     # Dibujar en la pantalla
     pantalla.fill(NEGRO)  # Fondo negro
     pygame.draw.rect(pantalla, AZUL, (jugador_pos_x, jugador_pos_y, jugador_ancho, jugador_alto))
+    # Dibujar enemigos (normales y especiales)
     for enemigo in enemigos:
-        pygame.draw.rect(pantalla, ROJO, (enemigo.x, enemigo.y, enemigo.ancho, enemigo.alto))
+        color = getattr(enemigo, 'color', ROJO)
+        pygame.draw.rect(pantalla, color, (enemigo.x, enemigo.y, enemigo.ancho, enemigo.alto))
+    # Dibujar jefe encima de los enemigos
+    if jefe_activo and jefe:
+        pygame.draw.rect(pantalla, jefe.color, (jefe.x, jefe.y, jefe.ancho, jefe.alto))
+        # Dibujar vida del jefe
+        texto_jefe = fuente.render(f"Jefe: {jefe.vida}", True, jefe.color)
+        pantalla.blit(texto_jefe, (ancho_pantalla//2 - 60, 50))
+        # Dibujar balas del jefe
+        for bala in jefe.balas:
+            pygame.draw.circle(pantalla, (255,0,255), (int(bala[0]), int(bala[1])), 12)
     # Dibujar balas
     for bala in balas:
         if bala[2] == 0:  # vertical
