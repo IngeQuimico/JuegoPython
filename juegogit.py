@@ -1,4 +1,5 @@
 import pygame
+import pygame.joystick
 import random
 
 # Inicialización de Pygame
@@ -209,65 +210,114 @@ jefe = None
 jefe_activo = False
 
 # Bucle principal del juego
+pygame.joystick.init()
+joysticks = []
+for i in range(pygame.joystick.get_count()):
+    joystick = pygame.joystick.Joystick(i)
+    joystick.init()
+    joysticks.append(joystick)
+
+left_axis_x = 0.0
+left_axis_y = 0.0
+metralleta_control_activa = False
 ejecutando = True
 while ejecutando:
-    # Manejo de eventos
+    # Manejo de eventos SOLO CONTROL
     for evento in pygame.event.get():
         if evento.type == pygame.QUIT:
             ejecutando = False
-        # Disparar bala con WASD
-        if evento.type == pygame.KEYDOWN:
-            if evento.key in [pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d]:
-                if balas_disponibles > 0:
-                    if evento.key == pygame.K_w:
-                        balas.append([jugador_pos_x + jugador_ancho // 2 - bala_ancho // 2, jugador_pos_y, 0, -bala_velocidad])
-                    if evento.key == pygame.K_s:
-                        balas.append([jugador_pos_x + jugador_ancho // 2 - bala_ancho // 2, jugador_pos_y + jugador_alto, 0, bala_velocidad])
-                    if evento.key == pygame.K_a:
-                        balas.append([jugador_pos_x, jugador_pos_y + jugador_alto // 2 - bala_ancho // 2, -bala_velocidad, 0])
-                    if evento.key == pygame.K_d:
-                        balas.append([jugador_pos_x + jugador_ancho, jugador_pos_y + jugador_alto // 2 - bala_ancho // 2, bala_velocidad, 0])
-                    balas_disponibles -= 1
-                    if sonido_disparo: sonido_disparo.play()
-            # Ataque especial con E
-            if evento.key == pygame.K_e and especial_disponible:
-                centro_x = jugador_pos_x + jugador_ancho // 2 - bala_ancho // 2
-                centro_y = jugador_pos_y + jugador_alto // 2 - bala_ancho // 2
-                direcciones = [
-                    (0, -bala_velocidad), (0, bala_velocidad),
-                    (-bala_velocidad, 0), (bala_velocidad, 0),
-                    (-bala_velocidad, -bala_velocidad), (bala_velocidad, -bala_velocidad),
-                    (-bala_velocidad, bala_velocidad), (bala_velocidad, bala_velocidad)
-                ]
-                if balas_disponibles >= 8:
-                    for dx, dy in direcciones:
-                        balas.append([centro_x, centro_y, dx, dy])
-                        if sonido_disparo: sonido_disparo.play()
-                    balas_disponibles -= 8
-                    especial_disponible = False
-                    eliminados_para_especial = 0
-            # Disparo con metralleta (SHIFT) si está activa
-            if evento.key == pygame.K_LSHIFT and metralleta_activa:
-                if balas_disponibles > 0:
-                    # Dispara 3 balas en ráfaga
-                    for i in range(3):
-                        balas.append([jugador_pos_x + jugador_ancho // 2 - bala_ancho // 2, jugador_pos_y, 0, -bala_velocidad])
-                        if sonido_disparo: sonido_disparo.play()
-                    balas_disponibles -= 3
-            # Ataque cuerpo a cuerpo (barra espaciadora) si no hay munición
-            if evento.key == pygame.K_SPACE and balas_disponibles == 0:
-                # Ataque corto alcance
+        # Movimiento con joystick izquierdo (ejes 0 y 1)
+        if evento.type == pygame.JOYAXISMOTION:
+            if evento.axis == 0:
+                left_axis_x = evento.value
+            if evento.axis == 1:
+                left_axis_y = evento.value
+        # Disparo con botones
+        if evento.type == pygame.JOYBUTTONDOWN:
+            # Arriba (botón 4)
+            if evento.button == 4 and balas_disponibles > 0:
+                balas.append([
+                    jugador_pos_x + jugador_ancho // 2 - bala_ancho // 2,
+                    jugador_pos_y,
+                    0,
+                    -bala_velocidad
+                ])
+                balas_disponibles -= 1
+                if sonido_disparo: sonido_disparo.play()
+                if joysticks and hasattr(joysticks[0], 'rumble'):
+                    try:
+                        joysticks[0].rumble(0.7, 0.7, 150)
+                    except Exception:
+                        pass
+            # Abajo (botón 0)
+            if evento.button == 0 and balas_disponibles > 0:
+                balas.append([
+                    jugador_pos_x + jugador_ancho // 2 - bala_ancho // 2,
+                    jugador_pos_y + jugador_alto,
+                    0,
+                    bala_velocidad
+                ])
+                balas_disponibles -= 1
+                if sonido_disparo: sonido_disparo.play()
+                if joysticks and hasattr(joysticks[0], 'rumble'):
+                    try:
+                        joysticks[0].rumble(0.7, 0.7, 150)
+                    except Exception:
+                        pass
+            # Derecha (botón 1)
+            if evento.button == 1 and balas_disponibles > 0:
+                balas.append([
+                    jugador_pos_x + jugador_ancho,
+                    jugador_pos_y + jugador_alto // 2 - bala_ancho // 2,
+                    bala_velocidad,
+                    0
+                ])
+                balas_disponibles -= 1
+                if sonido_disparo: sonido_disparo.play()
+                if joysticks and hasattr(joysticks[0], 'rumble'):
+                    try:
+                        joysticks[0].rumble(0.7, 0.7, 150)
+                    except Exception:
+                        pass
+            # Izquierda (botón 3)
+            if evento.button == 3 and balas_disponibles > 0:
+                balas.append([
+                    jugador_pos_x,
+                    jugador_pos_y + jugador_alto // 2 - bala_ancho // 2,
+                    -bala_velocidad,
+                    0
+                ])
+                balas_disponibles -= 1
+                if sonido_disparo: sonido_disparo.play()
+                if joysticks and hasattr(joysticks[0], 'rumble'):
+                    try:
+                        joysticks[0].rumble(0.7, 0.7, 150)
+                    except Exception:
+                        pass
+            # Metralleta (shift) con botón 8
+            if evento.button == 8:
+                metralleta_control_activa = True
+            # Cuchillo con botón 9
+            if evento.button == 9 and balas_disponibles == 0:
                 cuchillo_rect = pygame.Rect(jugador_pos_x-10, jugador_pos_y-10, jugador_ancho+20, jugador_alto+20)
                 for enemigo in enemigos:
                     if cuchillo_rect.colliderect(enemigo.rect()):
-                        enemigo.vida -= 2  # Mata de un golpe
+                        enemigo.vida -= 2
                         if enemigo.vida <= 0:
                             puntaje += 1
                             enemigos.remove(enemigo)
                             eliminados_para_especial += 1
                             if eliminados_para_especial >= 10:
                                 especial_disponible = True
+                        if joysticks and hasattr(joysticks[0], 'rumble'):
+                            try:
+                                joysticks[0].rumble(1.0, 1.0, 200)
+                            except Exception:
+                                pass
                         break
+        if evento.type == pygame.JOYBUTTONUP:
+            if evento.button == 8:
+                metralleta_control_activa = False
 
     # Espera antes de que aparezcan los enemigos
     if contador_espera < ticks_espera_enemigos:
@@ -296,43 +346,37 @@ while ejecutando:
 
     # La ronda solo avanza cuando no hay enemigos y el jefe ha sido derrotado
 
-    # Captura de teclas presionadas
-    teclas = pygame.key.get_pressed()
-    # Movimiento
-    if teclas[pygame.K_LEFT] and jugador_pos_x > 0:
-        jugador_pos_x -= jugador_velocidad
-    if teclas[pygame.K_RIGHT] and jugador_pos_x < ancho_pantalla - jugador_ancho:
-        jugador_pos_x += jugador_velocidad
-    if teclas[pygame.K_UP] and jugador_pos_y > 0:
-        jugador_pos_y -= jugador_velocidad
-    if teclas[pygame.K_DOWN] and jugador_pos_y < alto_pantalla - jugador_alto:
-        jugador_pos_y += jugador_velocidad
+    # Movimiento con joystick izquierdo
+    if abs(left_axis_x) > 0.2:
+        jugador_pos_x += int(left_axis_x * jugador_velocidad)
+        jugador_pos_x = max(0, min(ancho_pantalla - jugador_ancho, jugador_pos_x))
+    if abs(left_axis_y) > 0.2:
+        jugador_pos_y += int(left_axis_y * jugador_velocidad)
+        jugador_pos_y = max(0, min(alto_pantalla - jugador_alto, jugador_pos_y))
 
-    # Disparo automático con metralleta mientras se mantiene SHIFT y dirección
-    if metralleta_activa and teclas[pygame.K_LSHIFT]:
-        dx, dy = 0, 0
-        if teclas[pygame.K_w]:
-            dy = -bala_velocidad
-        if teclas[pygame.K_s]:
-            dy = bala_velocidad
-        if teclas[pygame.K_a]:
-            dx = -bala_velocidad
-        if teclas[pygame.K_d]:
-            dx = bala_velocidad
-        if dx != 0 or dy != 0:
-            if metralleta_disparo_timer == 0:
-                for i in range(3):
-                    balas.append([
-                        jugador_pos_x + jugador_ancho // 2 - bala_ancho // 2,
-                        jugador_pos_y + jugador_alto // 2 - bala_alto // 2,
-                        dx, dy
-                    ])
-                    if sonido_disparo: sonido_disparo.play()
-                metralleta_disparo_timer = metralleta_disparo_cooldown
-            else:
-                metralleta_disparo_timer -= 1
+    # Disparo automático con metralleta mientras se mantiene botón 8
+    if metralleta_activa and metralleta_control_activa:
+        # Dispara en todas las direcciones (arriba, abajo, derecha, izquierda) si se mantiene el botón
+        if metralleta_disparo_timer == 0:
+            for dir_boton, dx, dy in [(4,0,-bala_velocidad),(0,0,bala_velocidad),(1,bala_velocidad,0),(3,-bala_velocidad,0)]:
+                # Si el botón está presionado
+                if joysticks and joysticks[0].get_button(dir_boton):
+                    for i in range(3):
+                        balas.append([
+                            jugador_pos_x + jugador_ancho // 2 - bala_ancho // 2,
+                            jugador_pos_y + jugador_alto // 2 - bala_alto // 2,
+                            dx,
+                            dy
+                        ])
+                        if sonido_disparo: sonido_disparo.play()
+                        if joysticks and hasattr(joysticks[0], 'rumble'):
+                            try:
+                                joysticks[0].rumble(0.7, 0.7, 100)
+                            except Exception:
+                                pass
+            metralleta_disparo_timer = metralleta_disparo_cooldown
         else:
-            metralleta_disparo_timer = 0
+            metralleta_disparo_timer -= 1
     else:
         metralleta_disparo_timer = 0
 
@@ -380,10 +424,10 @@ while ejecutando:
                 balas.remove(bala)
                 break
     # Colisión bala-jefe
-    if jefe_activo and jefe:
+    if jefe_activo and jefe is not None:
         for bala in balas[:]:
             rect_bala = pygame.Rect(bala[0], bala[1], bala_ancho, bala_alto)
-            if rect_bala.colliderect(jefe.rect()):
+            if jefe is not None and rect_bala.colliderect(jefe.rect()):
                 jefe.vida -= 1
                 balas.remove(bala)
                 if jefe.vida <= 0:
